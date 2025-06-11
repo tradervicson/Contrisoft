@@ -47,6 +47,11 @@ export default function ProjectsPage() {
   const { user, loading: userLoading } = useUser();
   const router = useRouter();
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  };
+
   useEffect(() => {
     // Only redirect if we're done loading and there's no user
     if (!userLoading && !user) {
@@ -112,11 +117,6 @@ export default function ProjectsPage() {
       </div>
     );
   }
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = '/login';
-  };
 
   if (!projects || projects.length === 0) {
     return (

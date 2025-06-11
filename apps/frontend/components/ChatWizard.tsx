@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
+import BuildSheet from './BuildSheet';
 
 // Types
 type Role = 'system' | 'user' | 'assistant';
@@ -26,6 +27,7 @@ interface Question {
 interface ChatResponse {
   question?: Question;
   model?: any;
+  message?: string;
   error?: string;
 }
 
@@ -148,7 +150,7 @@ export default function ChatWizard() {
       }
       if (data.question) {
         // Append assistant question
-        setMessages(prev => [...prev, { role: 'assistant', content: data.question.text }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: data.question!.text }]);
         setCurrentQuestion(data.question);
       }
     } catch (err: any) {
@@ -166,7 +168,7 @@ export default function ChatWizard() {
     }
   }, [messages, currentQuestion, loading, callChatApi]);
 
-  const handleUserAnswer = (answer: string | FloorRoomMix[] | PublicAreaSelection[]) => {
+  const handleUserAnswer = (answer: string | string[] | FloorRoomMix[] | PublicAreaSelection[]) => {
     const content = typeof answer === 'string' ? answer : JSON.stringify(answer);
     setMessages(prev => [...prev, { role: 'user', content }]);
     setCurrentQuestion(null);
@@ -593,27 +595,49 @@ export default function ChatWizard() {
     }
   };
 
+  // Build sheet data (very basic for now)
+  const buildSheet = messages
+    .filter((m) => m.role === 'user')
+    .map((m, idx) => ({ label: `Q${idx + 1}`, value: m.content.slice(0, 25) + (m.content.length > 25 ? '…' : '') }));
+
+  const saveDraft = () => {
+    localStorage.setItem('chatDraft', JSON.stringify(messages));
+    alert('Draft saved! You can come back later.');
+  };
+
   return (
-    <div style={containerStyle}>
-      <div style={messagesStyle}>{renderMessages()}</div>
-      <div style={inputAreaStyle}>
-        {renderInput()}
-        <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-          <button 
-            onClick={resetConversation} 
-            className="btn-outline"
-            style={{ 
-              fontSize: '0.9rem',
-              padding: '0.5rem 1rem',
-              background: 'transparent',
-              border: '1px solid var(--medium-gray)',
-              color: 'var(--secondary-gray)'
-            }}
-          >
-            🔄 Restart Conversation
-          </button>
+    <div style={{ display: 'flex', height: '100%', width: '100%' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={containerStyle}>
+          <div style={messagesStyle}>{renderMessages()}</div>
+          <div style={inputAreaStyle}>
+            {renderInput()}
+            <div style={{ textAlign: 'center', marginTop: '1rem', display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+              <button 
+                onClick={resetConversation} 
+                className="btn-outline"
+                style={{ 
+                  fontSize: '0.9rem',
+                  padding: '0.5rem 1rem',
+                  background: 'transparent',
+                  border: '1px solid var(--medium-gray)',
+                  color: 'var(--secondary-gray)'
+                }}
+              >
+                🔄 Restart Conversation
+              </button>
+              <button
+                onClick={saveDraft}
+                className="btn-primary"
+                style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
+              >
+                💾 Save Draft
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+      <BuildSheet summary={buildSheet} />
     </div>
   );
 } 

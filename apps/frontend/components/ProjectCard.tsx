@@ -44,7 +44,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
   const floors = project.model?.data.floorCount || 0;
 
   return (
-    <Link href={`/projects/${project.id}`}>
+    <Link href={`/projects/${project.id}/design`}>
       <div
         className="card"
         style={{
