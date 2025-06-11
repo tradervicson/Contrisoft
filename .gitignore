@@ -4,4 +4,21 @@ node_modules/
 .DS_Store
 build/
 dist/
-.husky/ 
+.husky/
+
+# Ignore generic env files
+.env
+.env.*
+!.env.example
+
+# Next.js build output
+.next/
+
+# Supabase generated folders
+supabase/.temp/
+
+# Logs
+*.log
+
+# Mac system files
+.DS_Store 
