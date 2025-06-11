@@ -8,7 +8,8 @@
   ],
   "scripts": {
     "lint": "eslint . --ext .js,.jsx",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "dev:frontend": "pnpm --filter frontend dev"
   },
   "lint-staged": {
     "*.{js,jsx,json,md}": [
