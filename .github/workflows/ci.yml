@@ -28,6 +28,11 @@ jobs:
         
       - name: Build frontend
         run: pnpm --filter frontend build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://dummy.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR1bW15IiwiYXVkIjoiYXV0aGVudGljYXRlZCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNjQ1MTk4NDAwLCJleHAiOjE5NjA3NzQ0MDB9.M9jrxyvPLkUxWgOYSf5dNdJ8v_eR2q5X1VwMkwNNLS0
+          SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR1bW15IiwiYXVkIjoiYXV0aGVudGljYXRlZCIsInJvbGUiOiJzZXJ2aWNlX3JvbGUiLCJpYXQiOjE2NDUxOTg0MDAsImV4cCI6MTk2MDc3NDQwMH0.qNlEkO_y7T4KNQ7jMfP4kNQ7jMfP4kNQ7jMfP4kNQ7g
+          OPENAI_API_KEY: sk-dummy-key-for-build-only
         
       - name: Test (placeholder)
         run: echo "Build completed successfully" 
