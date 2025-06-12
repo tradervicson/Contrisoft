@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabaseClient';
 import { useUser } from '../../lib/user';
 import { useRouter } from 'next/router';
@@ -48,6 +48,22 @@ async function fetchProjects(): Promise<Project[]> {
       model: model ? { data: model.data } : undefined
     };
   });
+}
+
+async function deleteProject(projectId: string): Promise<void> {
+  // Delete hotel base model first (if exists)
+  await supabase
+    .from('hotel_base_models')
+    .delete()
+    .eq('project_id', projectId);
+  
+  // Delete project
+  const { error } = await supabase
+    .from('projects')
+    .delete()
+    .eq('id', projectId);
+  
+  if (error) throw error;
 }
 
 const StatusBadge = ({ status }: { status: string }) => {
@@ -124,6 +140,156 @@ const PriorityIndicator = ({ priority }: { priority: 'High' | 'Medium' | 'Low' }
   );
 };
 
+const DeleteConfirmModal = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  projectName,
+  isDeleting 
+}: { 
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  projectName: string;
+  isDeleting: boolean;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      backdropFilter: 'blur(4px)'
+    }}>
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '20px',
+        padding: '32px',
+        maxWidth: '500px',
+        width: '90%',
+        boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+        transform: isOpen ? 'scale(1)' : 'scale(0.9)',
+        transition: 'transform 0.2s ease'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⚠️</div>
+          <h3 style={{ 
+            fontSize: '24px', 
+            fontWeight: '700', 
+            color: '#1F2937',
+            marginBottom: '8px'
+          }}>
+            Delete Project
+          </h3>
+          <p style={{ 
+            color: '#6B7280', 
+            fontSize: '16px',
+            lineHeight: '1.5'
+          }}>
+            Are you sure you want to delete "<strong>{projectName}</strong>"? This action cannot be undone.
+          </p>
+        </div>
+        
+        <div style={{ 
+          display: 'flex', 
+          gap: '12px', 
+          justifyContent: 'center' 
+        }}>
+          <button
+            onClick={onClose}
+            disabled={isDeleting}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: 'white',
+              color: '#6B7280',
+              border: '2px solid #E5E7EB',
+              borderRadius: '12px',
+              fontWeight: '600',
+              cursor: isDeleting ? 'not-allowed' : 'pointer',
+              fontSize: '14px',
+              transition: 'all 0.2s ease',
+              opacity: isDeleting ? 0.5 : 1
+            }}
+            onMouseEnter={(e) => {
+              if (!isDeleting) {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.color = '#667eea';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isDeleting) {
+                e.currentTarget.style.borderColor = '#E5E7EB';
+                e.currentTarget.style.color = '#6B7280';
+              }
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isDeleting}
+            style={{
+              padding: '12px 24px',
+              background: isDeleting 
+                ? 'linear-gradient(135deg, #9CA3AF 0%, #6B7280 100%)'
+                : 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              fontWeight: '600',
+              cursor: isDeleting ? 'not-allowed' : 'pointer',
+              fontSize: '14px',
+              boxShadow: isDeleting 
+                ? '0 4px 12px rgba(156, 163, 175, 0.3)'
+                : '0 4px 12px rgba(239, 68, 68, 0.4)',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={(e) => {
+              if (!isDeleting) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(239, 68, 68, 0.5)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isDeleting) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.4)';
+              }
+            }}
+          >
+            {isDeleting ? (
+              <>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid rgba(255,255,255,0.3)',
+                  borderTop: '2px solid white',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                Deleting...
+              </>
+            ) : (
+              <>🗑️ Delete Project</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function ProjectsPage() {
   const { data: projects, isLoading: projectsLoading, error } = useQuery({ 
     queryKey: ['projects'], 
@@ -131,8 +297,37 @@ export default function ProjectsPage() {
   });
   const { user, loading: userLoading } = useUser();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; project: Project | null }>({
+    isOpen: false,
+    project: null
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteProject,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setDeleteModal({ isOpen: false, project: null });
+    },
+    onError: (error) => {
+      console.error('Failed to delete project:', error);
+      alert('Failed to delete project. Please try again.');
+    }
+  });
+
+  const handleDeleteClick = (project: Project, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDeleteModal({ isOpen: true, project });
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deleteModal.project) {
+      deleteMutation.mutate(deleteModal.project.id);
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -415,222 +610,12 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {/* Filters and Search */}
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '20px',
-        padding: '24px',
-        marginBottom: '32px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
-        display: 'flex',
-        gap: '20px',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        border: '1px solid rgba(255,255,255,0.2)'
-      }}>
-        <div style={{ flex: 1, minWidth: '300px' }}>
-          <input
-            type="text"
-            placeholder="🔍 Search projects..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '16px 20px',
-              border: '2px solid #F3F4F6',
-              borderRadius: '12px',
-              fontSize: '15px',
-              outline: 'none',
-              transition: 'all 0.2s ease',
-              backgroundColor: '#FAFBFC'
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = '#667eea';
-              e.target.style.backgroundColor = 'white';
-              e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = '#F3F4F6';
-              e.target.style.backgroundColor = '#FAFBFC';
-              e.target.style.boxShadow = 'none';
-            }}
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          aria-label="Filter projects by status"
-          style={{
-            padding: '16px 20px',
-            border: '2px solid #F3F4F6',
-            borderRadius: '12px',
-            fontSize: '15px',
-            backgroundColor: '#FAFBFC',
-            cursor: 'pointer',
-            outline: 'none',
-            fontWeight: '500',
-            transition: 'all 0.2s ease'
-          }}
-          onFocus={(e) => {
-            e.target.style.borderColor = '#667eea';
-            e.target.style.backgroundColor = 'white';
-          }}
-          onBlur={(e) => {
-            e.target.style.borderColor = '#F3F4F6';
-            e.target.style.backgroundColor = '#FAFBFC';
-          }}
-        >
-          <option value="All">All Status</option>
-          <option value="Draft">Draft</option>
-          <option value="Needs Re-calc">Needs Re-calc</option>
-          <option value="Costs Ready">Costs Ready</option>
-          <option value="Compliant">Compliant</option>
-        </select>
-      </div>
-
-      {/* Projects Table */}
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '20px',
-        overflow: 'hidden',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
-        border: '1px solid rgba(255,255,255,0.2)'
-      }}>
-        {/* Table Header */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 140px 160px 100px 120px 100px 80px',
-          gap: '20px',
-          padding: '20px 32px',
-          background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-          borderBottom: '2px solid #F1F5F9',
-          fontSize: '12px',
-          fontWeight: '700',
-          color: '#64748B',
-          textTransform: 'uppercase',
-          letterSpacing: '1px'
-        }}>
-          <div>Project Name</div>
-          <div>Status</div>
-          <div>Location</div>
-          <div>Floors</div>
-          <div>Total Keys</div>
-          <div>Created</div>
-          <div>Priority</div>
-        </div>
-
-        {/* Table Body */}
-        {filteredProjects.map((project, index) => {
-          const roomCount = project.model?.data.floorMix
-            ? project.model.data.floorMix.reduce((sum: number, f: any) => 
-                sum + Object.values(f.roomsByType).reduce((a: number, b: any) => a + b, 0), 0)
-            : 0;
-          
-          const location = project.model?.data.siteLocation || 'TBD';
-          const floors = project.model?.data.floorCount || 0;
-          const date = new Date(project.created_at).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric'
-          });
-          
-          // Mock priority for demo
-          const priorities = ['High', 'Medium', 'Low'] as const;
-          const priority = priorities[index % 3];
-          
-          return (
-            <Link key={project.id} href={`/projects/${project.id}/design`}>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 140px 160px 100px 120px 100px 80px',
-                gap: '20px',
-                padding: '24px 32px',
-                borderBottom: '1px solid #F8FAFC',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                alignItems: 'center'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#FAFBFC';
-                e.currentTarget.style.transform = 'translateX(4px)';
-                e.currentTarget.style.boxShadow = 'inset 4px 0 0 #667eea';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.transform = 'translateX(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-              >
-                <div>
-                  <div style={{ 
-                    fontWeight: '700', 
-                    color: '#1F2937',
-                    fontSize: '15px',
-                    marginBottom: '6px'
-                  }}>
-                    {project.name || 'Untitled Project'}
-                  </div>
-                  <div style={{ 
-                    fontSize: '13px', 
-                    color: '#6B7280',
-                    fontWeight: '500'
-                  }}>
-                    {project.model?.data.brandFlag || 'Brand TBD'}
-                  </div>
-                </div>
-                
-                <StatusBadge status={project.status} />
-                
-                <div style={{ 
-                  fontSize: '14px', 
-                  color: '#374151',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontWeight: '500'
-                }}>
-                  <span style={{ fontSize: '16px' }}>📍</span>
-                  <span>{location}</span>
-                </div>
-                
-                <div style={{ 
-                  fontSize: '15px', 
-                  color: '#1F2937',
-                  fontWeight: '600'
-                }}>
-                  {floors}
-                </div>
-                
-                <div style={{ 
-                  fontSize: '18px', 
-                  color: '#1F2937',
-                  fontWeight: '700'
-                }}>
-                  {roomCount}
-                </div>
-                
-                <div style={{ 
-                  fontSize: '14px', 
-                  color: '#6B7280',
-                  fontWeight: '500'
-                }}>
-                  {date}
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <PriorityIndicator priority={priority} />
-                </div>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-
       {/* Summary Stats */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
         gap: '24px',
-        marginTop: '32px'
+        marginBottom: '32px'
       }}>
         <div style={{
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -766,6 +751,251 @@ export default function ProjectsPage() {
           </div>
         </div>
       </div>
+
+      {/* Filters and Search */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '20px',
+        padding: '24px',
+        marginBottom: '32px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+        display: 'flex',
+        gap: '20px',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        border: '1px solid rgba(255,255,255,0.2)'
+      }}>
+        <div style={{ flex: 1, minWidth: '300px' }}>
+          <input
+            type="text"
+            placeholder="🔍 Search projects..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '16px 20px',
+              border: '2px solid #F3F4F6',
+              borderRadius: '12px',
+              fontSize: '15px',
+              outline: 'none',
+              transition: 'all 0.2s ease',
+              backgroundColor: '#FAFBFC'
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = '#667eea';
+              e.target.style.backgroundColor = 'white';
+              e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = '#F3F4F6';
+              e.target.style.backgroundColor = '#FAFBFC';
+              e.target.style.boxShadow = 'none';
+            }}
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          aria-label="Filter projects by status"
+          style={{
+            padding: '16px 20px',
+            border: '2px solid #F3F4F6',
+            borderRadius: '12px',
+            fontSize: '15px',
+            backgroundColor: '#FAFBFC',
+            cursor: 'pointer',
+            outline: 'none',
+            fontWeight: '500',
+            transition: 'all 0.2s ease'
+          }}
+          onFocus={(e) => {
+            e.target.style.borderColor = '#667eea';
+            e.target.style.backgroundColor = 'white';
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = '#F3F4F6';
+            e.target.style.backgroundColor = '#FAFBFC';
+          }}
+        >
+          <option value="All">All Status</option>
+          <option value="Draft">Draft</option>
+          <option value="Needs Re-calc">Needs Re-calc</option>
+          <option value="Costs Ready">Costs Ready</option>
+          <option value="Compliant">Compliant</option>
+        </select>
+      </div>
+
+      {/* Projects Table */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '20px',
+        overflow: 'hidden',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+        border: '1px solid rgba(255,255,255,0.2)'
+      }}>
+        {/* Table Header */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 140px 160px 100px 120px 100px 80px 60px',
+          gap: '20px',
+          padding: '20px 32px',
+          background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+          borderBottom: '2px solid #F1F5F9',
+          fontSize: '12px',
+          fontWeight: '700',
+          color: '#64748B',
+          textTransform: 'uppercase',
+          letterSpacing: '1px'
+        }}>
+          <div>Project Name</div>
+          <div>Status</div>
+          <div>Location</div>
+          <div>Floors</div>
+          <div>Total Keys</div>
+          <div>Created</div>
+          <div>Priority</div>
+          <div>Actions</div>
+        </div>
+
+        {/* Table Body */}
+        {filteredProjects.map((project, index) => {
+          const roomCount = project.model?.data.floorMix
+            ? project.model.data.floorMix.reduce((sum: number, f: any) => 
+                sum + Object.values(f.roomsByType).reduce((a: number, b: any) => a + b, 0), 0)
+            : 0;
+          
+          const location = project.model?.data.siteLocation || 'TBD';
+          const floors = project.model?.data.floorCount || 0;
+          const date = new Date(project.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric'
+          });
+          
+          // Mock priority for demo
+          const priorities = ['High', 'Medium', 'Low'] as const;
+          const priority = priorities[index % 3];
+          
+          return (
+            <div key={project.id} style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 140px 160px 100px 120px 100px 80px 60px',
+              gap: '20px',
+              padding: '24px 32px',
+              borderBottom: '1px solid #F8FAFC',
+              transition: 'all 0.2s ease',
+              alignItems: 'center'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#FAFBFC';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+            >
+              <Link href={`/projects/${project.id}/design`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <div style={{ cursor: 'pointer' }}>
+                  <div style={{ 
+                    fontWeight: '700', 
+                    color: '#1F2937',
+                    fontSize: '15px',
+                    marginBottom: '6px'
+                  }}>
+                    {project.name || 'Untitled Project'}
+                  </div>
+                  <div style={{ 
+                    fontSize: '13px', 
+                    color: '#6B7280',
+                    fontWeight: '500'
+                  }}>
+                    {project.model?.data.brandFlag || 'Brand TBD'}
+                  </div>
+                </div>
+              </Link>
+              
+              <StatusBadge status={project.status} />
+              
+              <div style={{ 
+                fontSize: '14px', 
+                color: '#374151',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: '500'
+              }}>
+                <span style={{ fontSize: '16px' }}>📍</span>
+                <span>{location}</span>
+              </div>
+              
+              <div style={{ 
+                fontSize: '15px', 
+                color: '#1F2937',
+                fontWeight: '600'
+              }}>
+                {floors}
+              </div>
+              
+              <div style={{ 
+                fontSize: '18px', 
+                color: '#1F2937',
+                fontWeight: '700'
+              }}>
+                {roomCount}
+              </div>
+              
+              <div style={{ 
+                fontSize: '14px', 
+                color: '#6B7280',
+                fontWeight: '500'
+              }}>
+                {date}
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <PriorityIndicator priority={priority} />
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                  onClick={(e) => handleDeleteClick(project, e)}
+                  style={{
+                    padding: '8px',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    color: '#EF4444',
+                    fontSize: '16px',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#FEF2F2';
+                    e.currentTarget.style.transform = 'scale(1.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
+                  title="Delete project"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, project: null })}
+        onConfirm={handleDeleteConfirm}
+        projectName={deleteModal.project?.name || 'Untitled Project'}
+        isDeleting={deleteMutation.isPending}
+      />
     </div>
   );
 } 
