@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabaseClient';
-import ProjectCard, { Project } from '../../components/ProjectCard';
 import { useUser } from '../../lib/user';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
+
+export interface Project {
+  id: string;
+  name?: string;
+  status: 'Draft' | 'Needs Re-calc' | 'Costs Ready' | 'Compliant';
+  created_at: string;
+  model?: { data: any };
+}
 
 async function fetchProjects(): Promise<Project[]> {
   // First get all projects
@@ -42,10 +50,83 @@ async function fetchProjects(): Promise<Project[]> {
   });
 }
 
+const StatusBadge = ({ status }: { status: string }) => {
+  const statusConfig = {
+    'Draft': { color: '#9CA3AF', bg: '#F3F4F6', icon: '📝' },
+    'Needs Re-calc': { color: '#F59E0B', bg: '#FEF3C7', icon: '🔄' },
+    'Costs Ready': { color: '#10B981', bg: '#D1FAE5', icon: '💰' },
+    'Compliant': { color: '#3B82F6', bg: '#DBEAFE', icon: '✅' }
+  };
+  
+  const config = statusConfig[status as keyof typeof statusConfig] || statusConfig['Draft'];
+  
+  return (
+    <div style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '6px 12px',
+      borderRadius: '20px',
+      backgroundColor: config.bg,
+      color: config.color,
+      fontSize: '14px',
+      fontWeight: '500',
+      border: `1px solid ${config.color}20`
+    }}>
+      <span>{config.icon}</span>
+      <span>{status}</span>
+    </div>
+  );
+};
+
+const PriorityIndicator = ({ priority }: { priority: 'High' | 'Medium' | 'Low' }) => {
+  const colors = {
+    'High': '#EF4444',
+    'Medium': '#F59E0B', 
+    'Low': '#10B981'
+  };
+  
+  return (
+    <div style={{
+      width: '12px',
+      height: '12px',
+      borderRadius: '50%',
+      backgroundColor: colors[priority],
+      border: '2px solid white',
+      boxShadow: '0 0 0 1px rgba(0,0,0,0.1)'
+    }} />
+  );
+};
+
+const ProgressBar = ({ progress }: { progress: number }) => {
+  return (
+    <div style={{
+      width: '100%',
+      height: '8px',
+      backgroundColor: '#F3F4F6',
+      borderRadius: '4px',
+      overflow: 'hidden'
+    }}>
+      <div style={{
+        width: `${progress}%`,
+        height: '100%',
+        backgroundColor: '#3B82F6',
+        borderRadius: '4px',
+        transition: 'width 0.3s ease'
+      }} />
+    </div>
+  );
+};
+
 export default function ProjectsPage() {
-  const { data: projects, isLoading: projectsLoading, error } = useQuery({ queryKey: ['projects'], queryFn: fetchProjects });
+  const { data: projects, isLoading: projectsLoading, error } = useQuery({ 
+    queryKey: ['projects'], 
+    queryFn: fetchProjects 
+  });
   const { user, loading: userLoading } = useUser();
   const router = useRouter();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -53,55 +134,87 @@ export default function ProjectsPage() {
   };
 
   useEffect(() => {
-    // Only redirect if we're done loading and there's no user
     if (!userLoading && !user) {
       router.push('/login');
     }
   }, [user, userLoading, router]);
 
-  // Show loading while checking auth or loading projects
+  // Filter projects based on search and status
+  const filteredProjects = projects?.filter(project => {
+    const matchesSearch = project.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         project.model?.data?.siteLocation?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'All' || project.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  }) || [];
+
   if (userLoading || projectsLoading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        backgroundColor: '#FAFBFC'
+      }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ 
             width: '40px', 
             height: '40px', 
-            border: '4px solid var(--medium-gray)',
-            borderTop: '4px solid var(--primary-blue)',
+            border: '3px solid #E5E7EB',
+            borderTop: '3px solid #3B82F6',
             borderRadius: '50%',
             animation: 'spin 1s linear infinite',
             margin: '0 auto 1rem'
           }}></div>
-          <p style={{ color: 'var(--secondary-gray)' }}>Loading your projects...</p>
+          <p style={{ color: '#6B7280', fontSize: '16px' }}>Loading your projects...</p>
         </div>
       </div>
     );
   }
 
   if (error) {
-    console.error('Projects loading error:', error);
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <div className="card" style={{ maxWidth: '600px', margin: '0 auto' }}>
-          <h2 style={{ color: 'var(--danger-red)', marginBottom: '1rem' }}>⚠️ Error Loading Projects</h2>
-          <p style={{ color: 'var(--secondary-gray)', marginBottom: '2rem' }}>
+      <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#FAFBFC', minHeight: '100vh' }}>
+        <div style={{ 
+          maxWidth: '600px', 
+          margin: '0 auto',
+          backgroundColor: 'white',
+          padding: '2rem',
+          borderRadius: '12px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+        }}>
+          <h2 style={{ color: '#EF4444', marginBottom: '1rem' }}>⚠️ Error Loading Projects</h2>
+          <p style={{ color: '#6B7280', marginBottom: '2rem' }}>
             {error.message || 'Unable to load your projects. Please try logging in again.'}
           </p>
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
             <button 
               onClick={() => window.location.reload()} 
-              className="btn-primary"
-              style={{ padding: '0.75rem 1.5rem' }}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#3B82F6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: '500',
+                cursor: 'pointer'
+              }}
             >
               🔄 Retry
             </button>
             <button 
               onClick={handleLogout} 
-              className="btn-outline"
-              style={{ padding: '0.75rem 1.5rem' }}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: 'white',
+                color: '#374151',
+                border: '1px solid #D1D5DB',
+                borderRadius: '8px',
+                fontWeight: '500',
+                cursor: 'pointer'
+              }}
             >
-              🚪 Logout & Login Again
+              🚪 Logout
             </button>
           </div>
         </div>
@@ -110,7 +223,6 @@ export default function ProjectsPage() {
   }
 
   if (!user) {
-    // If no user after loading, the useEffect will handle redirect
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <p>Redirecting to login...</p>
@@ -120,34 +232,44 @@ export default function ProjectsPage() {
 
   if (!projects || projects.length === 0) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div className="container">
-          <div className="card" style={{ textAlign: 'center', maxWidth: '600px', margin: '0 auto' }}>
-            <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🏨</div>
-            <h2 style={{ marginBottom: '1rem', color: 'var(--primary-blue)' }}>No Projects Yet</h2>
-            <p style={{ marginBottom: '2rem', color: 'var(--secondary-gray)', fontSize: '1.1rem' }}>
-              Ready to start your first hotel planning project? Our AI assistant will guide you through the process in just a few minutes.
-            </p>
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <a href="/new-project">
-                <button className="btn-primary" style={{ 
-                  padding: '1rem 2rem',
-                  fontSize: '1.1rem',
-                  fontWeight: '600'
-                }}>
-                  🚀 Create Your First Project
-                </button>
-              </a>
-              <a href="/">
-                <button className="btn-outline" style={{ 
-                  padding: '1rem 2rem',
-                  fontSize: '1.1rem',
-                  fontWeight: '600'
-                }}>
-                  ← Back to Home
-                </button>
-              </a>
-            </div>
+      <div style={{ 
+        minHeight: '100vh', 
+        backgroundColor: '#FAFBFC',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '3rem',
+          borderRadius: '16px',
+          textAlign: 'center',
+          maxWidth: '600px',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.05)'
+        }}>
+          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🏨</div>
+          <h2 style={{ marginBottom: '1rem', color: '#1F2937', fontSize: '24px' }}>No Projects Yet</h2>
+          <p style={{ marginBottom: '2rem', color: '#6B7280', fontSize: '16px', lineHeight: '1.6' }}>
+            Ready to start your first hotel planning project? Our AI assistant will guide you through the process.
+          </p>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+            <Link href="/new-project">
+              <button style={{
+                padding: '12px 24px',
+                backgroundColor: '#3B82F6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: '600',
+                fontSize: '16px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                🚀 Create Your First Project
+              </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -155,108 +277,344 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', padding: '2rem' }}>
-      <div className="container">
-        {/* Header */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          marginBottom: '3rem',
-          background: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(10px)',
-          padding: '1.5rem 2rem',
-          borderRadius: 'var(--border-radius-lg)',
-          boxShadow: 'var(--shadow-sm)'
-        }}>
-          <div>
-            <h1 style={{ 
-              margin: 0,
-              fontSize: '2.5rem',
-              background: 'linear-gradient(135deg, #007bff, #764ba2)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundColor: '#FAFBFC',
+      padding: '24px'
+    }}>
+      {/* Header */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        padding: '24px',
+        marginBottom: '24px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <div>
+          <h1 style={{ 
+            margin: 0,
+            fontSize: '28px',
+            fontWeight: '700',
+            color: '#1F2937',
+            marginBottom: '4px'
+          }}>
+            Projects Dashboard
+          </h1>
+          <p style={{ 
+            margin: 0,
+            color: '#6B7280',
+            fontSize: '16px'
+          }}>
+            Manage and track your hotel planning projects
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <Link href="/new-project">
+            <button style={{
+              padding: '12px 20px',
+              backgroundColor: '#3B82F6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px'
             }}>
-              Your Projects
-            </h1>
-            <p style={{ 
-              margin: '0.5rem 0 0 0',
-              color: 'var(--secondary-gray)',
-              fontSize: '1.1rem'
-            }}>
-              Manage and track your hotel planning projects
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <a href="/new-project">
-              <button className="btn-primary" style={{ 
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.75rem 1.5rem',
-                fontWeight: '600'
-              }}>
-                ➕ New Project
-              </button>
-            </a>
-            <button 
-              onClick={handleLogout} 
-              className="btn-outline"
-              style={{ 
-                padding: '0.75rem 1.5rem',
-                fontWeight: '600'
-              }}
-            >
-              Logout
+              ➕ New Project
             </button>
-          </div>
+          </Link>
+          <button 
+            onClick={handleLogout} 
+            style={{
+              padding: '12px 20px',
+              backgroundColor: 'white',
+              color: '#374151',
+              border: '1px solid #D1D5DB',
+              borderRadius: '8px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Logout
+          </button>
         </div>
+      </div>
 
-        {/* Projects Grid */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', 
-          gap: '2rem'
+      {/* Filters and Search */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        padding: '20px',
+        marginBottom: '24px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        display: 'flex',
+        gap: '16px',
+        alignItems: 'center',
+        flexWrap: 'wrap'
+      }}>
+        <div style={{ flex: 1, minWidth: '300px' }}>
+          <input
+            type="text"
+            placeholder="🔍 Search projects..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              border: '1px solid #D1D5DB',
+              borderRadius: '8px',
+              fontSize: '14px',
+              outline: 'none',
+              transition: 'border-color 0.2s'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#3B82F6'}
+            onBlur={(e) => e.target.style.borderColor = '#D1D5DB'}
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          aria-label="Filter projects by status"
+          style={{
+            padding: '12px 16px',
+            border: '1px solid #D1D5DB',
+            borderRadius: '8px',
+            fontSize: '14px',
+            backgroundColor: 'white',
+            cursor: 'pointer',
+            outline: 'none'
+          }}
+        >
+          <option value="All">All Status</option>
+          <option value="Draft">Draft</option>
+          <option value="Needs Re-calc">Needs Re-calc</option>
+          <option value="Costs Ready">Costs Ready</option>
+          <option value="Compliant">Compliant</option>
+        </select>
+      </div>
+
+      {/* Projects Table */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      }}>
+        {/* Table Header */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 120px 150px 100px 120px 100px 80px',
+          gap: '16px',
+          padding: '16px 24px',
+          backgroundColor: '#F9FAFB',
+          borderBottom: '1px solid #E5E7EB',
+          fontSize: '12px',
+          fontWeight: '600',
+          color: '#6B7280',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px'
         }}>
-          {projects.map(proj => (
-            <ProjectCard key={proj.id} project={proj} />
-          ))}
+          <div>Project Name</div>
+          <div>Status</div>
+          <div>Location</div>
+          <div>Floors</div>
+          <div>Total Keys</div>
+          <div>Created</div>
+          <div>Priority</div>
         </div>
 
-        {/* Stats Footer */}
-        <div style={{ 
-          marginTop: '3rem',
-          background: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(10px)',
-          padding: '2rem',
-          borderRadius: 'var(--border-radius-lg)',
-          boxShadow: 'var(--shadow-sm)',
+        {/* Table Body */}
+        {filteredProjects.map((project, index) => {
+          const roomCount = project.model?.data.floorMix
+            ? project.model.data.floorMix.reduce((sum: number, f: any) => 
+                sum + Object.values(f.roomsByType).reduce((a: number, b: any) => a + b, 0), 0)
+            : 0;
+          
+          const location = project.model?.data.siteLocation || 'TBD';
+          const floors = project.model?.data.floorCount || 0;
+          const date = new Date(project.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric'
+          });
+          
+          // Mock priority for demo
+          const priorities = ['High', 'Medium', 'Low'] as const;
+          const priority = priorities[index % 3];
+          
+          return (
+            <Link key={project.id} href={`/projects/${project.id}/design`}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 120px 150px 100px 120px 100px 80px',
+                gap: '16px',
+                padding: '20px 24px',
+                borderBottom: '1px solid #F3F4F6',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s',
+                alignItems: 'center'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <div>
+                  <div style={{ 
+                    fontWeight: '600', 
+                    color: '#1F2937',
+                    fontSize: '14px',
+                    marginBottom: '4px'
+                  }}>
+                    {project.name || 'Untitled Project'}
+                  </div>
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: '#6B7280'
+                  }}>
+                    {project.model?.data.brandFlag || 'Brand TBD'}
+                  </div>
+                </div>
+                
+                <StatusBadge status={project.status} />
+                
+                <div style={{ 
+                  fontSize: '14px', 
+                  color: '#374151',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <span>📍</span>
+                  <span>{location}</span>
+                </div>
+                
+                <div style={{ 
+                  fontSize: '14px', 
+                  color: '#374151',
+                  fontWeight: '500'
+                }}>
+                  {floors}
+                </div>
+                
+                <div style={{ 
+                  fontSize: '16px', 
+                  color: '#1F2937',
+                  fontWeight: '600'
+                }}>
+                  {roomCount}
+                </div>
+                
+                <div style={{ 
+                  fontSize: '14px', 
+                  color: '#6B7280'
+                }}>
+                  {date}
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <PriorityIndicator priority={priority} />
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Summary Stats */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '16px',
+        marginTop: '24px'
+      }}>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           textAlign: 'center'
         }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '2rem' }}>
-            <div>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--primary-blue)' }}>
-                {projects.length}
-              </div>
-              <div style={{ color: 'var(--secondary-gray)' }}>Total Projects</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--success-green)' }}>
-                {projects.filter(p => p.status === 'Compliant').length}
-              </div>
-              <div style={{ color: 'var(--secondary-gray)' }}>Compliant</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--warning-orange)' }}>
-                {projects.reduce((sum, p) => {
-                  const roomCount = p.model?.data.floorMix
-                    ? p.model.data.floorMix.reduce((sum: number, f: any) => sum + Object.values(f.roomsByType).reduce((a: number, b: any) => a + b, 0), 0)
-                    : 0;
-                  return sum + roomCount;
-                }, 0)}
-              </div>
-              <div style={{ color: 'var(--secondary-gray)' }}>Total Keys</div>
-            </div>
+          <div style={{ 
+            fontSize: '32px', 
+            fontWeight: '700', 
+            color: '#3B82F6',
+            marginBottom: '8px'
+          }}>
+            {projects.length}
+          </div>
+          <div style={{ color: '#6B7280', fontSize: '14px', fontWeight: '500' }}>
+            Total Projects
+          </div>
+        </div>
+        
+        <div style={{
+          backgroundColor: 'white',
+          padding: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          textAlign: 'center'
+        }}>
+          <div style={{ 
+            fontSize: '32px', 
+            fontWeight: '700', 
+            color: '#10B981',
+            marginBottom: '8px'
+          }}>
+            {projects.filter(p => p.status === 'Compliant').length}
+          </div>
+          <div style={{ color: '#6B7280', fontSize: '14px', fontWeight: '500' }}>
+            Compliant
+          </div>
+        </div>
+        
+        <div style={{
+          backgroundColor: 'white',
+          padding: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          textAlign: 'center'
+        }}>
+          <div style={{ 
+            fontSize: '32px', 
+            fontWeight: '700', 
+            color: '#F59E0B',
+            marginBottom: '8px'
+          }}>
+            {projects.reduce((sum, p) => {
+              const roomCount = p.model?.data.floorMix
+                ? p.model.data.floorMix.reduce((sum: number, f: any) => 
+                    sum + Object.values(f.roomsByType).reduce((a: number, b: any) => a + b, 0), 0)
+                : 0;
+              return sum + roomCount;
+            }, 0)}
+          </div>
+          <div style={{ color: '#6B7280', fontSize: '14px', fontWeight: '500' }}>
+            Total Keys
+          </div>
+        </div>
+        
+        <div style={{
+          backgroundColor: 'white',
+          padding: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          textAlign: 'center'
+        }}>
+          <div style={{ 
+            fontSize: '32px', 
+            fontWeight: '700', 
+            color: '#8B5CF6',
+            marginBottom: '8px'
+          }}>
+            {Math.round(projects.filter(p => p.status === 'Compliant').length / projects.length * 100) || 0}%
+          </div>
+          <div style={{ color: '#6B7280', fontSize: '14px', fontWeight: '500' }}>
+            Completion Rate
           </div>
         </div>
       </div>
